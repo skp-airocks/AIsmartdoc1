@@ -9,19 +9,39 @@ import { BrainCircuitIcon, CodeIcon } from './components/Icons';
 const App: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [fileDataUrl, setFileDataUrl] = useState<string | null>(null);
+  const [extractedText, setExtractedText] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [showPrompt, setShowPrompt] = useState<boolean>(false);
 
-  const PROMPT = `You are an expert document analyst AI. Your task is to transform the provided document image into an interactive summary. Analyze the content thoroughly and structure your response as a JSON object. Extract all relevant information accurately. If a section (like costs or risks) has no relevant information, return an empty array for that key. Adhere strictly to the provided JSON schema for your response.`;
+  const PROMPT = `Analyze the provided document and return your analysis as a single, valid JSON object. Do not include any text, code block formatting (like \`\`\`json), or explanations before or after the JSON object.
 
-  const handleFileChange = (selectedFile: File | null) => {
+The JSON object must strictly follow this structure:
+{
+  "summary": "A concise, comprehensive summary of the entire document's content.",
+  "criticalFindings": [
+    "A list of the most important, actionable insights, or key data points from the document."
+  ],
+  "costAndRiskAnalysis": {
+    "costs": [
+      "A list of all explicit or potential costs, financial figures, or pricing details mentioned."
+    ],
+    "risks": [
+      "A list of all identified risks, warnings, potential issues, or liabilities mentioned."
+    ]
+  }
+}
+
+If a section has no relevant information, return an empty array for that key (e.g., "costs": []). Ensure the entire output is a single JSON object parsable by JSON.parse().`;
+
+  const handleFileChange = (selectedFile: File | null, text?: string | null) => {
     setFile(selectedFile);
     setAnalysis(null);
     setError(null);
+    setExtractedText(text || null);
 
-    if (selectedFile) {
+    if (selectedFile && selectedFile.type.startsWith('image/')) {
       const reader = new FileReader();
       reader.onload = (e) => {
         setFileDataUrl(e.target?.result as string);
@@ -33,7 +53,7 @@ const App: React.FC = () => {
   };
 
   const handleAnalyze = useCallback(async () => {
-    if (!file || !fileDataUrl) {
+    if (!file) {
       setError('Please upload a file first.');
       return;
     }
@@ -43,10 +63,23 @@ const App: React.FC = () => {
     setAnalysis(null);
 
     try {
-      const base64Data = fileDataUrl.split(',')[1];
-      const mimeType = file.type;
-      
-      const result = await analyzeDocument(PROMPT, base64Data, mimeType);
+      let result;
+      if (extractedText) {
+        result = await analyzeDocument(PROMPT, {
+          type: 'text',
+          content: extractedText,
+        });
+      } else if (fileDataUrl) {
+        const base64Data = fileDataUrl.split(',')[1];
+        const mimeType = file.type;
+        result = await analyzeDocument(PROMPT, {
+          type: 'file',
+          base64Data,
+          mimeType,
+        });
+      } else {
+        throw new Error("No content available for analysis. Please re-upload your file.");
+      }
       setAnalysis(result);
     } catch (err) {
       console.error(err);
@@ -54,7 +87,7 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [file, fileDataUrl, PROMPT]);
+  }, [file, fileDataUrl, extractedText, PROMPT]);
 
   return (
     <div className="min-h-screen bg-slate-950 font-sans p-4 sm:p-6 lg:p-8">
@@ -67,7 +100,7 @@ const App: React.FC = () => {
             </h1>
           </div>
           <p className="mt-4 text-lg text-slate-400 max-w-2xl mx-auto">
-            Upload a document to receive an AI-powered summary, critical findings, and a cost/risk assessment.
+            Upload a document (PDF, Excel, image) to receive an AI-powered summary, critical findings, and a cost/risk assessment.
           </p>
         </header>
 
@@ -89,7 +122,7 @@ const App: React.FC = () => {
                 </button>
                 {showPrompt && (
                     <div className="mt-4 p-4 bg-slate-850 rounded-md">
-                        <p className="text-slate-400 font-mono text-sm">{PROMPT}</p>
+                        <p className="text-slate-400 font-mono text-sm whitespace-pre-wrap">{PROMPT}</p>
                     </div>
                 )}
             </div>

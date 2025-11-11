@@ -1,8 +1,8 @@
-
 import React from 'react';
 import { Analysis } from '../types';
 import Spinner from './Spinner';
-import { CheckCircleIcon, AlertTriangleIcon, SparklesIcon, FileTextIcon, DollarSignIcon, ShieldAlertIcon } from './Icons';
+import { CheckCircleIcon, AlertTriangleIcon, SparklesIcon, FileTextIcon, DollarSignIcon, ShieldAlertIcon, DownloadIcon } from './Icons';
+import * as jspdf from 'jspdf';
 
 interface AnalysisDisplayProps {
   analysis: Analysis | null;
@@ -11,6 +11,89 @@ interface AnalysisDisplayProps {
 }
 
 const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ analysis, isLoading, error }) => {
+
+  const handleDownloadPdf = () => {
+    if (!analysis) return;
+
+    const doc = new jspdf.jsPDF();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 15;
+    let y = margin;
+
+    const addPageNumbers = () => {
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(10);
+        doc.setTextColor(150);
+        doc.text(`Page ${i} of ${pageCount}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
+      }
+    };
+
+    const addSection = (title: string, content: string | string[], color: [number, number, number]) => {
+      if (y + 15 > pageHeight - margin) {
+        doc.addPage();
+        y = margin;
+      }
+
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(color[0], color[1], color[2]);
+      doc.text(title, margin, y);
+      y += 10;
+      doc.setTextColor(0, 0, 0);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(12);
+
+      if (Array.isArray(content)) {
+        if (content.length === 0) {
+          if (y + 10 > pageHeight - margin) { doc.addPage(); y = margin; }
+          doc.setFont('helvetica', 'italic');
+          doc.setTextColor(128, 128, 128);
+          doc.text('No items found.', margin, y);
+          y += 10;
+        } else {
+          content.forEach(item => {
+            const textLines = doc.splitTextToSize(item, pageWidth - margin * 2 - 5);
+            const textHeight = textLines.length * 5;
+            if (y + textHeight > pageHeight - margin) {
+              doc.addPage();
+              y = margin;
+            }
+            doc.text(`• ${item}`, margin, y, { maxWidth: pageWidth - margin * 2 });
+            y += textHeight + 2;
+          });
+        }
+      } else {
+        const textLines = doc.splitTextToSize(content, pageWidth - margin * 2);
+        const textHeight = textLines.length * 5;
+        if (y + textHeight > pageHeight - margin) {
+          doc.addPage();
+          y = margin;
+        }
+        doc.text(content, margin, y, { maxWidth: pageWidth - margin * 2 });
+        y += textHeight + 5;
+      }
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(0, 0, 0);
+      y += 5;
+    };
+
+    doc.setFontSize(22);
+    doc.setFont('helvetica', 'bold');
+    doc.text('AI Document Analysis Report', pageWidth / 2, y, { align: 'center' });
+    y += 15;
+
+    addSection('Summary', analysis.summary, [4, 98, 201]); // Blue
+    addSection('Critical Findings', analysis.criticalFindings, [4, 98, 201]); // Blue
+    addSection('Cost Analysis', analysis.costAndRiskAnalysis.costs, [22, 115, 82]); // Green
+    addSection('Risk Analysis', analysis.costAndRiskAnalysis.risks, [217, 119, 6]); // Amber
+
+    addPageNumbers();
+    doc.save('summary_and_analysis.pdf');
+  };
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-slate-400">
@@ -54,6 +137,16 @@ const AnalysisDisplay: React.FC<AnalysisDisplayProps> = ({ analysis, isLoading, 
   
   return (
     <div className="space-y-6 animate-fade-in">
+      <div className="text-right">
+        <button
+          onClick={handleDownloadPdf}
+          className="inline-flex items-center gap-2 bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-all duration-300 shadow-md"
+        >
+          <DownloadIcon className="w-5 h-5" />
+          Download Summary & Analysis (PDF)
+        </button>
+      </div>
+
       <div className="bg-slate-850 p-4 rounded-lg">
         <h3 className="flex items-center gap-2 text-xl font-semibold text-slate-100 mb-3">
             <FileTextIcon className="w-6 h-6 text-blue-400" />
