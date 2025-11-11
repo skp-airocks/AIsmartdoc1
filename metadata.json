@@ -1,0 +1,5 @@
+{
+  "name": "AI Document Analyzer",
+  "description": "An interactive tool that uses AI to upload any document (image, PDF, Excel), summarize its content, highlight critical findings, and separately identify costs and risks.",
+  "requestFramePermissions": []
+}
